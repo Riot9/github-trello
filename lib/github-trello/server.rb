@@ -25,28 +25,32 @@ module GithubTrello
 
       payload["commits"].each do |commit|
         # Figure out the card short id
-        match = commit["message"].match(/((start|per|finish|fix)e?s? \D?([0-9]+))/i)
-        next unless match and match[3].to_i > 0
+        match = commit["message"].match(/(\[\s*((start|finish|fix|close)e?s?)?\s*#([0-9]+)\s*\])/i)
 
-        results = http.get_card(board_id, match[3].to_i)
+        next unless match and match[4].to_i > 0
+
+        results = http.get_card(board_id, match[4].to_i)
         unless results
-          puts "[ERROR] Cannot find card matching ID #{match[3]}"
+          puts "[ERROR] Cannot find card matching ID #{match[4]}"
           next
         end
 
         results = JSON.parse(results)
 
         # Add the commit comment
-        message = "#{commit["author"]["name"]}: #{commit["message"]}\n\n[#{branch}] #{commit["url"]}"
+        message = "#{commit["author"]["name"]}:\n #{commit["message"]}\n\n[#{branch}] #{commit["url"]}"
         message.gsub!(match[1], "")
         message.gsub!(/\(\)$/, "")
 
         http.add_comment(results["id"], message)
 
-        #Determine the action to take
-        new_list_id = case match[2].downcase
-         when "start", "per" then start_list_target_id
-         when "finish", "fix" then finish_list_target_id
+        # done if no actions
+        next unless !match[3].nil?
+        
+        # Determine action to take
+        new_list_id = case match[3].downcase
+          when "start" then start_list_target_id
+          when "finish", "fix", "close" then finish_list_target_id
         end
 
         next unless !new_list_id.nil?
